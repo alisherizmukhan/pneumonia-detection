@@ -80,3 +80,26 @@ streamlit run app.py
 ```bash
 python -m pytest tests/ -v
 ```
+## Results
+
+Final model performance (DenseNet121):
+
+- Accuracy: 0.9071
+- Precision: 0.9536
+- Recall: 0.8949
+- F1-score: 0.9233
+- ROC-AUC: 0.9763
+
+After threshold tuning (0.3):
+
+- Accuracy: 0.9375
+- Recall: 0.9615
+- F1-score: 0.9506
+
+> Note: A threshold of 0.3 is used instead of the default 0.5 to improve recall, which is critical in medical diagnosis tasks.
+
+## Motivation
+
+In medical diagnosis, false negatives (missing a disease) are more critical than false positives. 
+Therefore, the model is optimized to maximize recall.
+

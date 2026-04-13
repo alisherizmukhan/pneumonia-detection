@@ -2,13 +2,6 @@
 data/
 *.zip
 
-# Checkpoints
-checkpoints/*.pt
-
-# Results
-results/*.png
-results/*.json
-
 # Python
 __pycache__/
 *.py[cod]

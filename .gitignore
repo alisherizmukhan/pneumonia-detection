@@ -1,5 +1,40 @@
+# Data
 data/
-checkpoints/
+*.zip
+
+# Checkpoints
+checkpoints/*.pt
+
+# Results
+results/*.png
+results/*.json
+
+# Python
 __pycache__/
-*.pyc
-.ipynb_checkpoints
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment
+.env
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Zone.Identifier files
+*:Zone.Identifier

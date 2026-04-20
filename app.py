@@ -13,7 +13,7 @@ from utils import load_model, get_device, load_config
 from data import IMAGENET_MEAN, IMAGENET_STD
 
 CONFIG = load_config("configs/config.yaml")
-CHECKPOINT_PATH = "checkpoints/best_model.pt"
+CHECKPOINT_PATH = "checkpoints/best_model_densenet121.pt"
 THRESHOLD = CONFIG.get("threshold", 0.3)
 IMAGE_SIZE = CONFIG.get("image_size", 224)
 
@@ -28,7 +28,7 @@ EXAMPLE_IMAGES = {
 @st.cache_resource
 def load_trained_model():
     device = get_device()
-    model = get_model()
+    model = get_model(CONFIG.get("model", "densenet121"))
     model = load_model(model, CHECKPOINT_PATH, device)
     model = model.to(device)
     model.eval()

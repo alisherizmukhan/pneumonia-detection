@@ -21,10 +21,10 @@ def load_image(image_path, image_size=224):
     return transform(image).unsqueeze(0)
 
 
-def predict(image_path, model_path, threshold=0.3):
+def predict(image_path, model_path, model_name="densenet121", threshold=0.3):
     device = get_device()
 
-    model = get_model()
+    model = get_model(model_name)
     model = load_model(model, model_path, device)
     model = model.to(device)
     model.eval()
@@ -46,11 +46,12 @@ def predict(image_path, model_path, threshold=0.3):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run inference on a chest X-ray image")
     parser.add_argument("--image", type=str, required=True, help="Path to X-ray image")
-    parser.add_argument("--model", type=str, default="checkpoints/best_model.pt")
+    parser.add_argument("--model", type=str, default="checkpoints/best_model_densenet121.pt")
     parser.add_argument("--config", type=str, default=DEFAULT_CONFIG, help="Config file for threshold")
     parser.add_argument("--threshold", type=float, default=None, help="Override threshold")
     args = parser.parse_args()
 
     config = load_config(args.config)
     threshold = args.threshold if args.threshold is not None else config.get("threshold", 0.3)
-    predict(args.image, args.model, threshold=threshold)
+    model_name = config.get("model", "densenet121")
+    predict(args.image, args.model, model_name=model_name, threshold=threshold)

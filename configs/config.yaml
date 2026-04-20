@@ -2,6 +2,7 @@ batch_size: 32
 learning_rate: 0.001
 epochs: 10
 image_size: 224
+model: densenet121
 data_dir: data/chest_xray
 seed: 42
 num_workers: 4

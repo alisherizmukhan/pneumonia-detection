@@ -1,65 +1,122 @@
 # Medical Image Classification: Pneumonia Detection
 
-A deep learning system for binary classification of chest X-ray images into **Normal** vs **Pneumonia** using a fine-tuned DenseNet-121 model.
+Binary classification of chest X-ray images into **Normal** vs **Pneumonia** using deep learning with PyTorch. The project implements three models — Baseline CNN, ResNet-18, and DenseNet-121 — to demonstrate progressive improvement through transfer learning.
 
 ## Project Structure
 
 ```
 pneumonia-detection/
 ├── src/
-│   ├── data.py           # Data loading, transforms, class weights
-│   ├── models.py         # DenseNet121 model definition
-│   ├── train.py          # Training pipeline with early stopping
-│   ├── evaluate.py       # Evaluation, error analysis, threshold tuning
-│   ├── infer.py          # Single-image inference CLI
-│   └── utils.py          # Utilities (seed, save/load, logging, config)
-├── app.py                # Streamlit web demo
+│   ├── data.py           # Data loading, augmentation, class weight computation
+│   ├── models.py         # All 3 model architectures (BaselineCNN, ResNet-18, DenseNet-121)
+│   ├── train.py          # Training pipeline (early stopping, LR scheduling, experiment tracking)
+│   ├── evaluate.py       # Evaluation, threshold tuning, error analysis, model comparison
+│   ├── infer.py          # Single-image CLI inference
+│   └── utils.py          # Seed, save/load, logging, config, experiment tracking
+├── app.py                # Streamlit web demo (DenseNet-121)
 ├── configs/
-│   └── config.yaml       # Training and inference configuration
+│   ├── config.yaml             # DenseNet-121 config (primary)
+│   ├── config_resnet18.yaml    # ResNet-18 config
+│   └── config_baseline.yaml    # Baseline CNN config
 ├── scripts/
-│   ├── train.sh          # Training launch script
-│   └── evaluate.sh       # Evaluation launch script
-├── tests/                # Unit tests
-├── results/              # Metrics, plots, error analysis
+│   ├── train.sh          # Train all 3 models
+│   └── evaluate.sh       # Evaluate primary model + comparison
+├── tests/                # Unit tests for models and data
+├── results/              # Metrics, plots, error analysis, model comparison
 ├── checkpoints/          # Saved model weights
 ├── data/chest_xray/      # Dataset (train/val/test splits)
-├── requirements.txt
+├── Makefile              # One-command build targets
+├── requirements.txt      # Python dependencies
+├── MODEL_COMPARISON.md   # Model evolution narrative and comparison
+├── PROJECT_EXPLANATION.md # Detailed project explanation
 └── README.md
 ```
 
-## Model
-
-**DenseNet-121** pretrained on ImageNet, with the classifier layer replaced for binary output. Trained using:
-
-- **Loss**: BCEWithLogitsLoss with class-weight correction for imbalanced data
-- **Optimizer**: Adam (lr=0.001, weight_decay=1e-4)
-- **Scheduler**: StepLR (step_size=5, gamma=0.1)
-- **Early Stopping**: patience=3 on validation loss
-- **Threshold**: 0.3 (optimized via F1-score sweep)
-
 ## Setup
+
+### 1. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### Dataset
+Or using Make:
 
-Download the [Chest X-Ray Pneumonia dataset](https://www.kaggle.com/datasets/paultimothymooney/chest-xray-pneumonia) and place it at `data/chest_xray/` with `train/`, `val/`, and `test/` subdirectories.
+```bash
+make install
+```
+
+### 2. Download the dataset
+
+Download the [Chest X-Ray Pneumonia dataset](https://www.kaggle.com/datasets/paultimothymooney/chest-xray-pneumonia) and extract it:
+
+```bash
+kaggle datasets download -d paultimothymooney/chest-xray-pneumonia
+unzip chest-xray-pneumonia.zip -d data/
+```
+
+The dataset should be at `data/chest_xray/` with `train/`, `val/`, and `test/` subdirectories.
+
+### 3. Verify setup
+
+```bash
+make test
+```
+
+## Quick Start (One Command)
+
+Train all 3 models and evaluate:
+
+```bash
+make train-all && make evaluate
+```
 
 ## Training
 
+Train individual models:
+
 ```bash
-python src/train.py --config configs/config.yaml
+make train-baseline      # Baseline CNN
+make train-resnet18      # ResNet-18
+make train-densenet121   # DenseNet-121 (primary)
 ```
+
+Or train all at once:
+
+```bash
+make train-all
+```
+
+Each training run:
+- Saves the best checkpoint to `checkpoints/best_model_{name}.pt`
+- Creates a numbered run directory under `results/run_N/` with config, history, and plots
+- Uses early stopping (patience=3) and StepLR scheduling
+- Applies class-weight correction for the imbalanced dataset
+- Seeds all RNGs with seed=42 for reproducibility
 
 ## Evaluation
 
 ```bash
-python src/evaluate.py --config configs/config.yaml --model checkpoints/best_model.pt
+make evaluate
 ```
 
-Generates: `metrics.json`, `confusion_matrix.png`, `roc_curve.png`, threshold analysis, and error analysis (false positive/negative images).
+This evaluates DenseNet-121 on the test set and runs a 3-model comparison.
+
+### Output Artifacts
+
+After training and evaluation, the `results/` directory contains:
+
+| File / Directory | Description |
+|-----------------|-------------|
+| `results/metrics.json` | Test-set metrics for the primary model (DenseNet-121): accuracy, precision, recall, F1, ROC-AUC |
+| `results/comparison.json` | Side-by-side metrics for all 3 models, used to populate [MODEL_COMPARISON.md](MODEL_COMPARISON.md) |
+| `results/best_threshold.json` | Threshold tuning results — sweeps [0.3–0.7] and reports the threshold maximizing F1 (found: 0.3) |
+| `results/confusion_matrix.png` | Confusion matrix heatmap for the primary model on the test set |
+| `results/roc_curve.png` | ROC curve with AUC score for the primary model |
+| `results/training_plot.png` | Loss/accuracy curves for the last training run |
+| `results/history.json` | Per-epoch training history (loss, accuracy, LR) for the last training run |
+| `results/errors/` | Misclassified images — `false_positive/` and `false_negative/` subdirectories for error analysis |
+| `results/run_N/` | Per-run archives: each training run saves its config, history, training plot, and model metadata |
 
 ## Inference
 
@@ -72,34 +129,56 @@ python src/infer.py --image path/to/xray.jpg
 Web demo:
 
 ```bash
-streamlit run app.py
+make demo
+```
+
+## Models
+
+| Model | Type | Description |
+|-------|------|-------------|
+| Baseline CNN | From scratch | 3-layer CNN with dropout |
+| ResNet-18 | Transfer learning | Pretrained ImageNet backbone, fine-tuned |
+| DenseNet-121 | Transfer learning | Pretrained ImageNet backbone, fine-tuned (primary) |
+
+See [MODEL_COMPARISON.md](MODEL_COMPARISON.md) for the full evolution narrative and results comparison.
+
+## Configuration
+
+All configs share the same structure. Key parameters in `configs/config.yaml`:
+
+```yaml
+model: densenet121          # Model architecture
+batch_size: 32
+learning_rate: 0.001
+epochs: 10
+weight_decay: 0.0001        # L2 regularization
+lr_step_size: 5             # StepLR schedule
+lr_gamma: 0.1
+early_stopping_patience: 3
+threshold: 0.3              # Decision threshold (tuned for recall)
+seed: 42                    # Reproducibility
 ```
 
 ## Tests
 
 ```bash
-python -m pytest tests/ -v
+make test
 ```
+
+Runs 12 tests covering all 3 model architectures (forward pass, frozen backbone, factory dispatch) and data loading.
 ## Results
 
-Final model performance (DenseNet121):
+### Model Comparison (Test Set)
 
-- Accuracy: 0.9071
-- Precision: 0.9536
-- Recall: 0.8949
-- F1-score: 0.9233
-- ROC-AUC: 0.9763
+| Model | Accuracy | Precision | Recall | F1 (0.5) | F1 (0.3) | ROC-AUC |
+|-------|----------|-----------|--------|----------|----------|---------|
+| Baseline CNN | 0.8686 | 0.9254 | 0.8590 | 0.8910 | 0.9010 | 0.9415 |
+| ResNet-18 | 0.8750 | 0.9727 | 0.8231 | 0.8917 | 0.9272 | 0.9743 |
+| **DenseNet-121** | **0.9071** | **0.9536** | **0.8949** | **0.9233** | **0.9506** | **0.9763** |
 
-After threshold tuning (0.3):
+DenseNet-121 is the best model across all metrics. After threshold tuning (0.3), recall improves to 0.9615 with F1 = 0.9506.
 
-- Accuracy: 0.9375
-- Recall: 0.9615
-- F1-score: 0.9506
+> A threshold of 0.3 is used instead of the default 0.5 to improve recall — critical in medical diagnosis where missing a pneumonia case (false negative) is more costly than a false alarm.
 
-> Note: A threshold of 0.3 is used instead of the default 0.5 to improve recall, which is critical in medical diagnosis tasks.
-
-## Motivation
-
-In medical diagnosis, false negatives (missing a disease) are more critical than false positives. 
-Therefore, the model is optimized to maximize recall.
+See [MODEL_COMPARISON.md](MODEL_COMPARISON.md) for the full evolution narrative.
 

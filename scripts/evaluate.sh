@@ -2,4 +2,6 @@
 set -e
 
 cd "$(dirname "$0")/.."
-python src/evaluate.py --config configs/config.yaml --model checkpoints/best_model.pt
+
+echo "=== Evaluating DenseNet-121 (primary model) ==="
+python src/evaluate.py --config configs/config.yaml --model checkpoints/best_model_densenet121.pt

@@ -1,0 +1,11 @@
+{
+    "model_name": "resnet18",
+    "total_params": 11177025,
+    "trainable_params": 11177025,
+    "best_val_loss": 0.11956623196601868,
+    "epochs_trained": 6,
+    "class_counts": {
+        "NORMAL": 1341,
+        "PNEUMONIA": 3875
+    }
+}

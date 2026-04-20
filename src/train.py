@@ -125,11 +125,13 @@ def train(config):
     logger.info(f"Using pos_weight: {pos_weight.item():.4f}")
 
     # Model
+    model_name = config.get("model", "densenet121")
     model = get_model(
+        model_name=model_name,
         freeze_backbone=config.get("freeze_backbone", False),
     )
     model = model.to(device)
-    logger.info("Model: DenseNet121")
+    logger.info(f"Model: {model_name}")
 
     # Loss and optimizer
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
@@ -185,7 +187,7 @@ def train(config):
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            best_path = os.path.join(checkpoint_dir, "best_model.pt")
+            best_path = os.path.join(checkpoint_dir, f"best_model_{model_name}.pt")
             save_model(model, best_path)
             logger.info(f"Saved best model (val_loss={val_loss:.4f})")
 
@@ -208,7 +210,7 @@ def train(config):
 
     # Save model info to run directory
     model_info = {
-        "model_name": "densenet121",
+        "model_name": model_name,
         "total_params": sum(p.numel() for p in model.parameters()),
         "trainable_params": sum(p.numel() for p in model.parameters() if p.requires_grad),
         "best_val_loss": best_val_loss,

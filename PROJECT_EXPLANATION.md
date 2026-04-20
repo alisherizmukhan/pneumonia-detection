@@ -21,16 +21,27 @@ The project uses the **Chest X-Ray Images (Pneumonia)** dataset from Kaggle, ori
 
 ## 3. Model Architecture
 
-The model is **DenseNet-121** (Densely Connected Convolutional Network) pretrained on ImageNet.
+The project implements three models to demonstrate progressive improvement:
 
-**Why DenseNet-121:**
-- Dense connectivity encourages feature reuse and reduces parameter count compared to similarly deep architectures.
-- Strong performance on medical imaging benchmarks due to rich multi-scale feature extraction.
-- The 121-layer variant balances depth and computational cost.
+### Baseline CNN (trained from scratch)
+A simple 3-layer convolutional network:
+```
+Conv2d(3→32) → ReLU → MaxPool
+Conv2d(32→64) → ReLU → MaxPool
+Conv2d(64→128) → ReLU → MaxPool
+Flatten → Linear(128*28*28, 256) → ReLU → Dropout(0.5) → Linear(256, 1)
+```
+**Purpose:** Establishes a baseline to quantify the benefit of transfer learning.
 
-**Modifications:**
-- The original 1000-class ImageNet classifier head is replaced with a single linear layer: `nn.Linear(1024, 1)`, producing a raw logit for binary classification.
-- All pretrained feature layers are fine-tuned (not frozen by default), allowing the model to adapt low-level features to grayscale X-ray patterns.
+### ResNet-18 (transfer learning)
+A pretrained ResNet-18 with the final fully connected layer replaced: `nn.Linear(512, 1)`. All layers are fine-tuned.
+
+**Why tried:** Hypothesis — ImageNet pretrained features (edges, textures, shapes) transfer well to medical imaging, even though X-rays are visually different from natural images. ResNet-18 is small enough to fine-tune efficiently while providing strong feature extraction.
+
+### DenseNet-121 (transfer learning — final model)
+A pretrained DenseNet-121 with the classifier replaced: `nn.Linear(1024, 1)`. All layers are fine-tuned.
+
+**Why DenseNet-121 over ResNet-18:** DenseNet's dense connectivity pattern encourages feature reuse across layers and improves gradient flow. This is particularly beneficial for medical imaging where subtle texture patterns (ground-glass opacities, consolidation regions) matter. The CheXNet paper demonstrated DenseNet-121's effectiveness on chest X-ray classification. Despite having more parameters, DenseNet-121's parameter efficiency (through feature reuse) and richer multi-scale representations yield better discrimination.
 
 ## 4. Training Pipeline
 
@@ -75,6 +86,23 @@ Misclassified images are extracted and saved:
 
 This allows visual inspection of failure modes to guide future improvements.
 
+### Model Comparison
+The evaluation pipeline also runs a 3-model comparison (`model_comparison()`) that evaluates all available checkpoints and produces `results/comparison.json` with side-by-side metrics.
+
+### Output Artifacts
+
+| File | Purpose |
+|------|---------|
+| `results/metrics.json` | Primary model test metrics (accuracy, precision, recall, F1, ROC-AUC) |
+| `results/comparison.json` | All 3 models evaluated side-by-side |
+| `results/best_threshold.json` | Threshold sweep results (best threshold and metrics at each) |
+| `results/confusion_matrix.png` | Confusion matrix heatmap |
+| `results/roc_curve.png` | ROC curve with AUC |
+| `results/training_plot.png` | Training/validation loss and accuracy curves |
+| `results/history.json` | Per-epoch training history |
+| `results/errors/` | Misclassified images (false positives and false negatives) |
+| `results/run_N/` | Per-run archive (config, history, plot, model metadata) |
+
 ## 6. Design Decisions
 
 | Decision | Rationale |
@@ -91,14 +119,18 @@ This allows visual inspection of failure modes to guide future improvements.
 ```
 src/
 ├── data.py       — Dataset loading, augmentation, class weight computation
-├── models.py     — DenseNet-121 model definition
+├── models.py     — All 3 architectures: BaselineCNN, ResNet-18, DenseNet-121
 ├── train.py      — Full training loop with scheduling and early stopping
-├── evaluate.py   — Metrics, plots, threshold tuning, error analysis
+├── evaluate.py   — Metrics, plots, threshold tuning, error analysis, model comparison
 ├── infer.py      — Single-image CLI inference
 └── utils.py      — Seed, save/load, logging, config, experiment tracking
 
-app.py            — Streamlit web interface for interactive demo
-configs/config.yaml — Centralized hyperparameters and paths
+app.py              — Streamlit web interface for interactive demo
+configs/
+├── config.yaml           — DenseNet-121 config (primary)
+├── config_resnet18.yaml  — ResNet-18 config
+└── config_baseline.yaml  — Baseline CNN config
+Makefile            — One-command build targets
 ```
 
 ## 8. How to Reproduce
@@ -109,20 +141,20 @@ pip install -r requirements.txt
 
 # 2. Place dataset at data/chest_xray/ (train/val/test splits)
 
-# 3. Train
-python src/train.py --config configs/config.yaml
+# 3. Train all models
+make train-all
 
-# 4. Evaluate
-python src/evaluate.py --config configs/config.yaml --model checkpoints/best_model.pt
+# 4. Evaluate (includes 3-model comparison)
+make evaluate
 
 # 5. Run inference on a single image
 python src/infer.py --image path/to/xray.jpg
 
 # 6. Launch web demo
-streamlit run app.py
+make demo
 
 # 7. Run tests
-python -m pytest tests/ -v
+make test
 ```
 
 ## 9. Limitations and Future Work

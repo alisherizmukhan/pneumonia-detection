@@ -88,7 +88,6 @@ make train-all
 ```
 
 Each training run:
-- Saves the best checkpoint to `checkpoints/best_model_{name}.pt`
 - Creates a numbered run directory under `results/run_N/` with config, history, and plots
 - Uses early stopping (patience=3) and StepLR scheduling
 - Applies class-weight correction for the imbalanced dataset
@@ -133,6 +132,45 @@ make demo
 ```
 
 ## Models
+
+This project implements three model architectures. Pretrained weights are not included in this GitHub repository due to file size constraints; the official model weights are hosted on Hugging Face:
+
+https://huggingface.co/kasumikouu/pneumonia-models
+
+Available model files (place these in `./checkpoints/` after downloading):
+
+- `best_model_resnet18.pt`
+- `best_model_baseline.pt`
+- `best_model_densenet121.pt`
+
+Manual download:
+
+1. Visit the Hugging Face repo: https://huggingface.co/kasumikouu/pneumonia-models
+2. Download the desired `.pt` files and move them into the repository root `checkpoints/` directory:
+
+```bash
+mkdir -p checkpoints
+mv ~/Downloads/best_model_densenet121.pt checkpoints/
+```
+
+Programmatic download (Python) using `huggingface_hub`:
+
+```python
+from huggingface_hub import hf_hub_download
+import shutil, os
+
+os.makedirs("checkpoints", exist_ok=True)
+local_path = hf_hub_download(
+	repo_id="kasumikouu/pneumonia-models",
+	filename="best_model_densenet121.pt",
+	cache_dir="checkpoints",
+)
+# Copy to checkpoints root (hf_hub_download returns the downloaded path)
+shutil.copy(local_path, os.path.join("checkpoints", "best_model_densenet121.pt"))
+print("Downloaded to ./checkpoints/best_model_densenet121.pt")
+```
+
+Model architectures:
 
 | Model | Type | Description |
 |-------|------|-------------|

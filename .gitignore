@@ -31,3 +31,8 @@ Thumbs.db
 
 # Zone.Identifier files
 *:Zone.Identifier
+
+# Internal / not for repo
+CLAUDE.md
+FEEDBACK.md
+PRESENTATION.md

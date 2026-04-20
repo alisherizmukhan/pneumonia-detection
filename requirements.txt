@@ -9,3 +9,4 @@ tqdm
 PyYAML
 requests
 kaggle
+streamlit

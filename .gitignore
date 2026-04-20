@@ -30,4 +30,4 @@ env/
 Thumbs.db
 
 # Zone.Identifier files
-*:Zone.Identifier
+*:Zone.Identifiercheckpoints/*.pt

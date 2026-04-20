@@ -109,7 +109,7 @@ def overlay_heatmap(image_np: np.ndarray, heatmap: np.ndarray, alpha: float = 0.
     Returns:
         (H, W, 3) uint8 blended image.
     """
-    colormap = cm.get_cmap("jet")
+    colormap = plt.colormaps["jet"]
     heatmap_rgb = (colormap(heatmap)[:, :, :3] * 255).astype(np.uint8)
     blended = (alpha * heatmap_rgb + (1 - alpha) * image_np).astype(np.uint8)
     return blended

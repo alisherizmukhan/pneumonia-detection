@@ -30,7 +30,7 @@ EXAMPLE_IMAGES = {
 @st.cache_resource
 def load_trained_model():
     device = get_device()
-    model = get_model(MODEL_NAME)
+    model = get_model(MODEL_NAME, pretrained=False)
     model = load_model(model, CHECKPOINT_PATH, device)
     model = model.to(device)
     model.eval()

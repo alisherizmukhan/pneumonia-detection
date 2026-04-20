@@ -240,6 +240,7 @@ def evaluate(config, model_path: str):
     model = get_model(
         model_name=model_name,
         freeze_backbone=config.get("freeze_backbone", False),
+        pretrained=False,
     )
     model = load_model(model, model_path, device)
     model = model.to(device)

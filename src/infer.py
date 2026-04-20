@@ -24,7 +24,7 @@ def load_image(image_path, image_size=224):
 def predict(image_path, model_path, model_name="densenet121", threshold=0.3):
     device = get_device()
 
-    model = get_model(model_name)
+    model = get_model(model_name, pretrained=False)
     model = load_model(model, model_path, device)
     model = model.to(device)
     model.eval()

@@ -274,7 +274,7 @@ def main():
     data_dir = args.data_dir or os.path.join(config["data_dir"], "test")
     device = get_device()
 
-    model = get_model(model_name=model_name, freeze_backbone=False)
+    model = get_model(model_name=model_name, freeze_backbone=False, pretrained=False)
     model = load_model(model, args.model, device)
     model = model.to(device)
 

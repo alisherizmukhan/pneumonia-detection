@@ -1,5 +1,6 @@
 #!/bin/bash
 # Generate Grad-CAM grids for all trained models.
+# Run this AFTER scripts/train.sh has completed.
 set -e
 
 cd "$(dirname "$0")/.."

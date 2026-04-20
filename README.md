@@ -2,6 +2,17 @@
 
 A deep learning system for binary classification of chest X-ray images into **Normal** vs **Pneumonia** using a fine-tuned DenseNet-121 model.
 
+## Dataset Download
+
+```bash
+kaggle datasets download -d paultimothymooney/chest-xray-pneumonia
+unzip chest-xray-pneumonia.zip -d data/
+mv data/chest_xray data/chest_xray_tmp 2>/dev/null; mv data/chest-xray-pneumonia/chest_xray data/chest_xray 2>/dev/null || true
+rm -rf data/chest-xray-pneumonia chest-xray-pneumonia.zip
+```
+
+Requires the [Kaggle CLI](https://github.com/Kaggle/kaggle-api) and your `~/.kaggle/kaggle.json` credentials. After running, the dataset will be at `data/chest_xray/` with `train/`, `val/`, and `test/` subdirectories.
+
 ## Project Structure
 
 ```

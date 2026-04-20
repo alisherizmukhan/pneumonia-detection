@@ -169,13 +169,15 @@ def evaluate(config, model_path: str):
     )
 
     # Model
-    logger.info("Loading model: DenseNet121")
+    model_name = config.get("model", "densenet121")
+    logger.info(f"Loading model: {model_name}")
     logger.info(f"Checkpoint: {model_path}")
 
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Checkpoint not found: {model_path}")
 
     model = get_model(
+        model_name=model_name,
         freeze_backbone=config.get("freeze_backbone", False),
     )
     model = load_model(model, model_path, device)

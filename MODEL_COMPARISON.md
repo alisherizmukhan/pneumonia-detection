@@ -79,7 +79,15 @@ This document traces the model evolution across three iterations, explaining the
 - **Architecture choice matters:** DenseNet-121's dense connectivity provides richer feature representations than ResNet-18's residual connections for this task.
 - **Threshold tuning matters:** Lowering the decision threshold from 0.5 to 0.3 trades a small amount of precision for a larger recall gain — appropriate for medical screening where missing a pneumonia case is more costly than a false alarm.
 
-## 6. Known Limitations
+## 6. Known Limitations and Mitigations
 
-- **Small validation set (16 images):** Early stopping responds to noise rather than genuine overfitting. Each misclassification shifts validation accuracy by 6.25%. This is a known methodological weakness of the Kaggle dataset split. A proper solution would be k-fold cross-validation on the training set, using the official validation split only as an additional sanity check.
-- **No explainability:** The current pipeline does not include Grad-CAM or other attention visualization methods to verify that the model activates on clinically relevant lung regions rather than spurious artifacts (scanner borders, text annotations).
+- **Small validation set (16 images):** Early stopping responds to noise rather than genuine overfitting. Each misclassification shifts validation accuracy by 6.25%. This is a known methodological weakness of the Kaggle dataset split. **Mitigation:** Stratified 5-fold cross-validation on the full 5,216-image training set is implemented in `src/kfold.py` — each fold uses ~1,043 images as validation (65× the official split), producing mean ± std estimates that are statistically meaningful. Run with `bash scripts/kfold.sh`.
+- **Explainability:** Grad-CAM (Selvaraju et al., ICCV 2017) is implemented in `src/gradcam.py` and integrated into the Streamlit app. Heatmaps verify whether the model activates on the lung parenchyma or on spurious artifacts (scanner borders, text annotations). Run `bash scripts/gradcam.sh` to generate visualisation grids for all three models.
+
+## 7. References
+
+- Rajpurkar et al. (2017). *CheXNet: Radiologist-Level Pneumonia Detection on Chest X-Rays with Deep Learning*. arXiv:1711.05225.
+- Huang et al. (2017). *Densely Connected Convolutional Networks*. CVPR 2017.
+- He et al. (2016). *Deep Residual Learning for Image Recognition*. CVPR 2016.
+- Kohavi (1995). *A Study of Cross-Validation and Bootstrap for Accuracy Estimation and Model Selection*. IJCAI.
+- Selvaraju et al. (2017). *Grad-CAM: Visual Explanations from Deep Networks via Gradient-based Localization*. ICCV 2017.

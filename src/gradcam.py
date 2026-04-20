@@ -37,7 +37,7 @@ def _get_target_layer(model, model_name: str):
     if model_name == "densenet121":
         return model.features.denseblock4
     if model_name == "resnet18":
-        return model.layer4[-1]
+        return model.backbone.layer4[-1]
     if model_name == "baseline":
         # Last Conv2d in the features Sequential
         return model.features[-3]  # index of last Conv2d before ReLU+MaxPool

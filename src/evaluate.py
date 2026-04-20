@@ -152,6 +152,67 @@ def threshold_tuning(y_true, y_prob, results_dir, logger):
     return best["threshold"]
 
 
+def model_comparison(config, results_dir, logger):
+    """Evaluate all three models and produce comparison.json."""
+    device = get_device()
+    checkpoint_dir = config.get("checkpoint_dir", "checkpoints")
+
+    model_configs = {
+        "baseline": os.path.join(checkpoint_dir, "best_model_baseline.pt"),
+        "resnet18": os.path.join(checkpoint_dir, "best_model_resnet18.pt"),
+        "densenet121": os.path.join(checkpoint_dir, "best_model_densenet121.pt"),
+    }
+    comparison = {}
+
+    for model_name, checkpoint_path in model_configs.items():
+        if not os.path.exists(checkpoint_path):
+            logger.warning(
+                f"No checkpoint found for {model_name} at {checkpoint_path}. Skipping."
+            )
+            continue
+
+        logger.info(f"Evaluating model: {model_name}")
+        model = get_model(model_name=model_name, freeze_backbone=False)
+        model = load_model(model, checkpoint_path, device)
+        model = model.to(device)
+
+        _, _, test_loader = get_dataloaders(
+            data_dir=config["data_dir"],
+            batch_size=config["batch_size"],
+            image_size=config["image_size"],
+            num_workers=config.get("num_workers", 4),
+        )
+
+        y_true, y_pred, y_prob = predict(model, test_loader, device)
+        metrics = compute_metrics(y_true, y_pred, y_prob)
+        metrics["model"] = model_name
+
+        # Also compute F1 at tuned threshold 0.3
+        tuned_preds = (y_prob >= 0.3).astype(int)
+        metrics["f1_at_0.3"] = float(f1_score(y_true, tuned_preds, zero_division=0))
+
+        comparison[model_name] = metrics
+        logger.info(f"  {model_name}: Acc={metrics['accuracy']:.4f} F1={metrics['f1_score']:.4f} AUC={metrics['roc_auc']:.4f}")
+
+    if comparison:
+        save_path = os.path.join(results_dir, "comparison.json")
+        save_metrics(comparison, save_path)
+        logger.info(f"Comparison saved to {save_path}")
+
+        # Print comparison table
+        logger.info("\n" + "=" * 80)
+        logger.info(f"{'Model':<14} {'Accuracy':>10} {'Precision':>10} {'Recall':>10} {'F1':>10} {'F1@0.3':>10} {'ROC-AUC':>10}")
+        logger.info("-" * 80)
+        for name, m in comparison.items():
+            logger.info(
+                f"{name:<14} {m['accuracy']:>10.4f} {m['precision']:>10.4f} "
+                f"{m['recall']:>10.4f} {m['f1_score']:>10.4f} {m.get('f1_at_0.3', 0):>10.4f} {m['roc_auc']:>10.4f}"
+            )
+        logger.info("=" * 80)
+
+    return comparison
+
+
 def evaluate(config, model_path: str):
     """Full evaluation pipeline."""
     logger = get_logger("evaluate")
@@ -218,6 +279,10 @@ def evaluate(config, model_path: str):
     logger.info("Running threshold tuning...")
     threshold_tuning(y_true, y_prob, results_dir, logger)
 
+    # Model comparison (if multiple checkpoints exist)
+    logger.info("Running model comparison...")
+    model_comparison(config, results_dir, logger)
+
     logger.info("Evaluation complete.")
     return metrics
 
@@ -229,13 +294,19 @@ def main():
         help="Path to config YAML file",
     )
     parser.add_argument(
-        "--model", type=str, default="checkpoints/best_model.pt",
-        help="Path to saved model checkpoint",
+        "--model", type=str, default=None,
+        help="Path to saved model checkpoint (default: checkpoints/best_model_{config.model}.pt)",
     )
     args = parser.parse_args()
 
     config = load_config(args.config)
-    evaluate(config, args.model)
+    model_path = args.model
+    if model_path is None:
+        model_name = config.get("model", "densenet121")
+        model_path = os.path.join(
+            config.get("checkpoint_dir", "checkpoints"), f"best_model_{model_name}.pt"
+        )
+    evaluate(config, model_path)
 
 
 if __name__ == "__main__":

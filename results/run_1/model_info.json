@@ -1,0 +1,11 @@
+{
+    "model_name": "baseline",
+    "total_params": 25783873,
+    "trainable_params": 25783873,
+    "best_val_loss": 0.269379585981369,
+    "epochs_trained": 6,
+    "class_counts": {
+        "NORMAL": 1341,
+        "PNEUMONIA": 3875
+    }
+}

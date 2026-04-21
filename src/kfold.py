@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import argparse
 import time
 from logging import Logger
+from typing import Final
 
 import numpy as np
 import torch
@@ -38,18 +39,18 @@ from data import get_transforms, compute_class_weights
 from models import get_model
 from utils import set_seed, get_device, get_logger, load_config, save_metrics, EarlyStopping
 
-DEFAULT_SEED: int = 42
-DEFAULT_MODEL: str = "densenet121"
-DEFAULT_THRESHOLD: float = 0.5
-DEFAULT_IMAGE_SIZE: int = 224
-DEFAULT_BATCH_SIZE: int = 32
-DEFAULT_NUM_WORKERS: int = 4
-DEFAULT_EPOCHS: int = 10
-DEFAULT_WEIGHT_DECAY: float = 1e-4
-DEFAULT_LR_STEP_SIZE: int = 5
-DEFAULT_LR_GAMMA: float = 0.1
-DEFAULT_EARLY_STOPPING_PATIENCE: int = 3
-DEFAULT_RESULTS_DIR: str = "results"
+DEFAULT_SEED: Final[int] = 42
+DEFAULT_MODEL: Final[str] = "densenet121"
+DEFAULT_THRESHOLD: Final[float] = 0.5
+DEFAULT_IMAGE_SIZE: Final[int] = 224
+DEFAULT_BATCH_SIZE: Final[int] = 32
+DEFAULT_NUM_WORKERS: Final[int] = 4
+DEFAULT_EPOCHS: Final[int] = 10
+DEFAULT_WEIGHT_DECAY: Final[float] = 1e-4
+DEFAULT_LR_STEP_SIZE: Final[int] = 5
+DEFAULT_LR_GAMMA: Final[float] = 0.1
+DEFAULT_EARLY_STOPPING_PATIENCE: Final[int] = 3
+DEFAULT_RESULTS_DIR: Final[str] = "results"
 
 FoldMetrics = dict[str, float]
 Summary = dict[str, object]

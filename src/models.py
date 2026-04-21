@@ -9,21 +9,21 @@ class BaselineCNN(nn.Module):
         super().__init__()
         self.features = nn.Sequential(
             nn.Conv2d(3, 32, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
+            nn.ReLU(),
             nn.MaxPool2d(2, 2),
 
             nn.Conv2d(32, 64, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
+            nn.ReLU(),
             nn.MaxPool2d(2, 2),
 
             nn.Conv2d(64, 128, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
+            nn.ReLU(),
             nn.MaxPool2d(2, 2),
         )
         self.classifier = nn.Sequential(
             nn.Flatten(),
             nn.Linear(128 * 28 * 28, 256),
-            nn.ReLU(inplace=True),
+            nn.ReLU(),
             nn.Dropout(0.5),
             nn.Linear(256, 1),
         )
@@ -37,9 +37,10 @@ class BaselineCNN(nn.Module):
 class ResNet18Model(nn.Module):
     """Transfer learning model using pretrained ResNet-18."""
 
-    def __init__(self, freeze_backbone: bool = False):
+    def __init__(self, freeze_backbone: bool = False, pretrained: bool = True):
         super().__init__()
-        self.backbone = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        weights = models.ResNet18_Weights.DEFAULT if pretrained else None
+        self.backbone = models.resnet18(weights=weights)
 
         if freeze_backbone:
             for param in self.backbone.parameters():
@@ -51,9 +52,10 @@ class ResNet18Model(nn.Module):
         return self.backbone(x)
 
 
-def _build_densenet121(freeze_backbone: bool = False) -> nn.Module:
+def _build_densenet121(freeze_backbone: bool = False, pretrained: bool = True) -> nn.Module:
     """Create a DenseNet-121 model for binary classification."""
-    model = models.densenet121(weights=models.DenseNet121_Weights.DEFAULT)
+    weights = models.DenseNet121_Weights.DEFAULT if pretrained else None
+    model = models.densenet121(weights=weights)
 
     if freeze_backbone:
         for param in model.features.parameters():
@@ -63,7 +65,7 @@ def _build_densenet121(freeze_backbone: bool = False) -> nn.Module:
     return model
 
 
-def get_model(model_name: str = "densenet121", freeze_backbone: bool = False) -> nn.Module:
+def get_model(model_name: str = "densenet121", freeze_backbone: bool = False, pretrained: bool = True) -> nn.Module:
     """Factory function to create a model by name.
 
     Args:
@@ -76,9 +78,9 @@ def get_model(model_name: str = "densenet121", freeze_backbone: bool = False) ->
     if model_name == "baseline":
         return BaselineCNN()
     elif model_name == "resnet18":
-        return ResNet18Model(freeze_backbone=freeze_backbone)
+        return ResNet18Model(freeze_backbone=freeze_backbone, pretrained=pretrained)
     elif model_name == "densenet121":
-        return _build_densenet121(freeze_backbone=freeze_backbone)
+        return _build_densenet121(freeze_backbone=freeze_backbone, pretrained=pretrained)
     else:
         raise ValueError(
             f"Unknown model: {model_name}. Choose 'baseline', 'resnet18', or 'densenet121'."

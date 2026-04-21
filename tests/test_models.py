@@ -16,6 +16,19 @@ class TestBaselineCNN(unittest.TestCase):
         out = model(x)
         self.assertEqual(out.shape, (2, 1))
 
+    def test_output_is_logit(self):
+        model = BaselineCNN()
+        model.eval()
+        x = torch.randn(1, 3, 224, 224)
+        with torch.no_grad():
+            out = model(x)
+        self.assertEqual(out.shape, (1, 1))
+
+    def test_all_params_trainable(self):
+        model = BaselineCNN()
+        for name, param in model.named_parameters():
+            self.assertTrue(param.requires_grad, f"{name} should be trainable")
+
 
 class TestResNet18(unittest.TestCase):
 
@@ -30,6 +43,17 @@ class TestResNet18(unittest.TestCase):
         for name, param in model.backbone.named_parameters():
             if "fc" not in name:
                 self.assertFalse(param.requires_grad, f"{name} should be frozen")
+        # fc should still be trainable
+        for param in model.backbone.fc.parameters():
+            self.assertTrue(param.requires_grad)
+
+    def test_output_shape(self):
+        model = ResNet18Model()
+        model.eval()
+        x = torch.randn(1, 3, 224, 224)
+        with torch.no_grad():
+            out = model(x)
+        self.assertEqual(out.shape, (1, 1))
 
 
 class TestDenseNet121(unittest.TestCase):
@@ -47,6 +71,14 @@ class TestDenseNet121(unittest.TestCase):
         for param in model.classifier.parameters():
             self.assertTrue(param.requires_grad)
 
+    def test_output_shape(self):
+        model = get_model("densenet121")
+        model.eval()
+        x = torch.randn(1, 3, 224, 224)
+        with torch.no_grad():
+            out = model(x)
+        self.assertEqual(out.shape, (1, 1))
+
 
 class TestModelFactory(unittest.TestCase):
 
@@ -60,7 +92,6 @@ class TestModelFactory(unittest.TestCase):
 
     def test_get_model_densenet121(self):
         model = get_model("densenet121")
-        # DenseNet121 is a torchvision model, not a custom class
         self.assertEqual(model.classifier.out_features, 1)
 
     def test_get_model_invalid(self):

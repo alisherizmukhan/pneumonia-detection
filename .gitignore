@@ -2,8 +2,6 @@
 data/
 *.zip
 
-checkpoints/
-
 # Python
 __pycache__/
 *.py[cod]
@@ -32,4 +30,9 @@ env/
 Thumbs.db
 
 # Zone.Identifier files
-*:Zone.Identifiercheckpoints/*.pt
+*:Zone.Identifier
+
+# Internal / not for repo
+CLAUDE.md
+FEEDBACK.md
+PRESENTATION.mdcheckpoints/*.pt

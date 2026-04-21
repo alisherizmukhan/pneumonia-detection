@@ -2,6 +2,10 @@
 data/
 *.zip
 
+# Models
+checkpoints/
+models/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -13,7 +17,6 @@ build/
 # Jupyter
 .ipynb_checkpoints/
 
-сheckpoints/
 
 
 # Environment

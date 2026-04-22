@@ -172,7 +172,7 @@ def model_comparison(config, results_dir, logger):
             continue
 
         logger.info(f"Evaluating model: {model_name}")
-        model = get_model(model_name=model_name, freeze_backbone=False)
+        model = get_model(model_name=model_name, freeze_backbone=False, pretrained=False)
         model = load_model(model, checkpoint_path, device)
         model = model.to(device)
 

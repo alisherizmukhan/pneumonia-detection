@@ -520,15 +520,25 @@ def run_xai_for_model(
     #     for Blackwell SM arch. cuDNN already won every autotune round anyway.
     #   - "default"                → skips Triton autotuning, routes to cuDNN,
     #     thread-safe, works on all architectures. Correct mode for this workload.
+    # LRP uses hook-based FX symbolic tracing internally to walk layer graphs.
+    # torch.compile wraps the model in a Dynamo eval_frame, and tracing a
+    # Dynamo-compiled model with FX raises:
+    #   "FX to symbolically trace a dynamo-optimized function. Not supported."
+    # Solution: keep a reference to the raw (uncompiled) model for LRP.
+    # GradCAM and IG only need forward + backward passes — safe with compile.
+    # Faithfulness batches are pure inference — also safe with compile.
+    raw_model = model  # uncompiled reference, used exclusively by LRP
+
     if use_compile and device.type == "cuda":
         print(f"  [{model_name}] Compiling model (default mode, cuDNN-backed)...")
         t0 = time.time()
-        model = torch.compile(model, mode="default")
+        compiled_model = torch.compile(model, mode="default")
         dummy = torch.zeros(1, 3, image_size, image_size, device=device)
         with torch.no_grad():
-            model(dummy)
+            compiled_model(dummy)
         torch.cuda.synchronize(device)
         print(f"  [{model_name}] Compiled + warmed up in {time.time()-t0:.1f}s")
+        model = compiled_model  # used by GradCAM, IG, and faithfulness
 
     _, test_transform = get_transforms(image_size)
     dataset    = datasets.ImageFolder(root=data_dir, transform=test_transform)
@@ -547,7 +557,7 @@ def run_xai_for_model(
 
     gc_exp  = GradCAM(model, _get_target_layer(model, model_name))
     ig_exp  = IntegratedGradients(model, n_steps=ig_steps)
-    lrp_exp = LRPEpsilon(model, epsilon=1e-6)
+    lrp_exp = LRPEpsilon(raw_model, epsilon=1e-6)  # raw_model: uncompiled
 
     # Dedicated CUDA stream per method allows the scheduler to overlap work
     streams = {}

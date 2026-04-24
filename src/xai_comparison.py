@@ -132,26 +132,42 @@ class IntegratedGradients:
         self.model   = model
         self.n_steps = n_steps
 
-    def __call__(self, input_tensor: torch.Tensor) -> np.ndarray:
-        """(1, C, H, W) → (H, W) attribution in [0, 1]."""
+    def __call__(self, input_tensor: torch.Tensor, chunk_size: int = 32) -> np.ndarray:
+        """(1, C, H, W) → (H, W) attribution in [0, 1].
+
+        chunk_size: number of interpolation steps per forward pass.
+            Full batch (n_steps=300) needs ~8 GB activation memory on DenseNet121.
+            Chunking to 32 keeps peak usage under 1 GB regardless of model.
+            Captum and the original IG paper implementation both chunk this way.
+        """
         self.model.eval()
         device = input_tensor.device
 
-        baseline = torch.zeros_like(input_tensor)              # (1, C, H, W)
-        alphas   = torch.linspace(0.0, 1.0, self.n_steps, device=device)
-        delta    = input_tensor - baseline
+        # (1, C, H, W) baseline and delta
+        baseline = torch.zeros_like(input_tensor)
+        delta    = (input_tensor - baseline).float()  # (1, C, H, W)
+        inp_f    = input_tensor.float()
 
-        # (n_steps, C, H, W) — single allocation, no loop
-        interpolated = (baseline + alphas.view(-1, 1, 1, 1) * delta).squeeze(0)
-        interpolated = interpolated.float().requires_grad_(True)
+        alphas = torch.linspace(0.0, 1.0, self.n_steps, device=device)  # (n_steps,)
+        accumulated_grads = torch.zeros_like(inp_f.squeeze(0))            # (C, H, W)
 
-        with torch.enable_grad():
-            logits = self.model(interpolated)   # (n_steps, 1)
-            logits.sum().backward()
+        # Process in chunks to bound peak activation memory
+        for start in range(0, self.n_steps, chunk_size):
+            end   = min(start + chunk_size, self.n_steps)
+            a_chunk = alphas[start:end]                          # (chunk,)
+            # (chunk, C, H, W) — correct broadcast, no erroneous squeeze
+            interp = (baseline.float() + a_chunk.view(-1, 1, 1, 1) * delta)
+            interp = interp.requires_grad_(True)
 
-        grads    = interpolated.grad            # (n_steps, C, H, W)
-        avg_grads = grads.mean(dim=0)
-        ig = (input_tensor.squeeze(0).float() - baseline.squeeze(0).float()) * avg_grads
+            with torch.enable_grad():
+                logits = self.model(interp)   # (chunk, 1)
+                logits.sum().backward()
+
+            accumulated_grads += interp.grad.sum(dim=0).detach()  # sum over chunk
+            del interp, logits
+
+        avg_grads = accumulated_grads / self.n_steps
+        ig = delta.squeeze(0) * avg_grads
 
         attr = ig.abs().sum(dim=0).detach().cpu().numpy()
         a_min, a_max = attr.min(), attr.max()
@@ -286,28 +302,40 @@ def _make_masked_batch(
 ) -> torch.Tensor:
     """Build (n_steps+1, C, H, W) batch of progressively masked images.
 
-    Materialises all masking variants at once so the GPU processes them in
-    a single forward pass instead of n_steps+1 sequential calls.
+    Fully vectorised — no Python loop over steps.  Uses a cumulative pixel-rank
+    mask to decide which pixels are revealed/hidden at each step.
 
-    Memory for n_steps=100, 224x224, fp16 ≈ 30 MB — trivial on 32 GB VRAM.
+    Memory: (n_steps+1) × C × H × W × fp32  ≈  101 × 3 × 224² × 4B = 61 MB.
     """
-    W = input_tensor.shape[3]
-    step_size = max(1, (input_tensor.shape[2] * W) // n_steps)
-    imgs = []
-    img  = baseline.clone()
+    C, H, W  = input_tensor.shape[1], input_tensor.shape[2], input_tensor.shape[3]
+    n_pixels = H * W
+    step_size = max(1, n_pixels // n_steps)
+    N = n_steps + 1                                     # number of variants
 
-    for k in range(n_steps + 1):
-        if k > 0:
-            idx = flat_indices[: k * step_size]
-            row, col = idx // W, idx % W
-            img = img.clone()
-            if mode == "deletion":
-                img[0, :, row, col] = 0.0
-            else:
-                img[0, :, row, col] = input_tensor[0, :, row, col]
-        imgs.append(img)
+    # pixel_rank[p] = position of pixel p in the saliency ranking (0 = most salient)
+    pixel_rank = np.empty(n_pixels, dtype=np.int64)
+    pixel_rank[flat_indices] = np.arange(n_pixels)
 
-    return torch.cat(imgs, dim=0)   # (n_steps+1, C, H, W)
+    # threshold[k] = how many pixels are revealed at step k
+    thresholds = np.arange(N, dtype=np.int64) * step_size  # (N,)
+
+    # mask[k, p] = True if pixel p should be from the *source* at step k
+    # source = input for insertion (reveal), zeros for deletion (mask)
+    mask = (pixel_rank[None, :] < thresholds[:, None])     # (N, n_pixels)  bool
+    mask_t = torch.from_numpy(mask).to(input_tensor.device)  # (N, H*W)
+
+    # Flatten spatial dims for scatter
+    src  = input_tensor.view(1, C, n_pixels).expand(N, -1, -1).clone()   # (N, C, H*W)
+    base = baseline.view(1, C, n_pixels).expand(N, -1, -1).clone()       # (N, C, H*W)
+
+    if mode == "insertion":
+        # start from baseline, reveal src pixels where mask is True
+        result = torch.where(mask_t.unsqueeze(1), src, base)
+    else:
+        # start from src, zero out pixels where mask is True
+        result = torch.where(mask_t.unsqueeze(1), base, src)
+
+    return result.view(N, C, H, W)
 
 
 def _batched_forward(model: nn.Module, batch: torch.Tensor, chunk: int = FAITH_BATCH) -> np.ndarray:
@@ -336,7 +364,7 @@ def deletion_auc(
     baseline = torch.zeros_like(input_tensor)
     batch    = _make_masked_batch(input_tensor, flat_indices, n_steps, "deletion", baseline)
     scores   = _batched_forward(model, batch.to(input_tensor.device))
-    return float(np.trapz(scores, np.linspace(0, 1, len(scores))))
+    return float(np.trapezoid(scores, np.linspace(0, 1, len(scores))))
 
 
 def insertion_auc(
@@ -350,7 +378,7 @@ def insertion_auc(
     blurred  = _gaussian_blur_tensor(input_tensor)
     batch    = _make_masked_batch(input_tensor, flat_indices, n_steps, "insertion", blurred)
     scores   = _batched_forward(model, batch.to(input_tensor.device))
-    return float(np.trapz(scores, np.linspace(0, 1, len(scores))))
+    return float(np.trapezoid(scores, np.linspace(0, 1, len(scores))))
 
 
 # ─────────────────────────────────────────────────────────────────────────────

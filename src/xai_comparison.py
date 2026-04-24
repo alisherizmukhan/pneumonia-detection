@@ -514,19 +514,16 @@ def run_xai_for_model(
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    # torch.compile inside a thread requires CUDA graphs disabled.
-    # "reduce-overhead" enables CUDA graphs by default, which use thread-local
-    # storage (TLS) initialised only on the main thread → AssertionError in
-    # cudagraph_trees.py when called from worker threads.
-    # "max-autotune-no-cudagraphs" gives full Triton kernel fusion without graphs.
+    # torch.compile notes for RTX 5090 (Blackwell / sm_120):
+    #   - "reduce-overhead"        → CUDA graphs crash in worker threads (TLS)
+    #   - "max-autotune-no-cudagraphs" → NoValidChoicesError: Triton not yet tuned
+    #     for Blackwell SM arch. cuDNN already won every autotune round anyway.
+    #   - "default"                → skips Triton autotuning, routes to cuDNN,
+    #     thread-safe, works on all architectures. Correct mode for this workload.
     if use_compile and device.type == "cuda":
-        print(f"  [{model_name}] Compiling model (no-cudagraphs, thread-safe)...")
+        print(f"  [{model_name}] Compiling model (default mode, cuDNN-backed)...")
         t0 = time.time()
-        model = torch.compile(
-            model,
-            mode="max-autotune-no-cudagraphs",
-        )
-        # Warm-up: triggers the actual Triton kernel compilation
+        model = torch.compile(model, mode="default")
         dummy = torch.zeros(1, 3, image_size, image_size, device=device)
         with torch.no_grad():
             model(dummy)

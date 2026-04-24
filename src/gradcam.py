@@ -145,7 +145,7 @@ def _denormalise(tensor: torch.Tensor) -> np.ndarray:
     """Convert a normalised image tensor to uint8 numpy (H, W, 3)."""
     mean: np.ndarray = np.array(IMAGENET_MEAN)
     std: np.ndarray = np.array(IMAGENET_STD)
-    img: np.ndarray = tensor.cpu().numpy().transpose(1, 2, 0)
+    img: np.ndarray = tensor.detach().cpu().numpy().transpose(1, 2, 0)
     img = std * img + mean
     img = np.clip(img * 255, 0, 255).astype(np.uint8)
     return img

@@ -3,6 +3,8 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
+import numpy as np
+import matplotlib.pyplot as plt
 import streamlit as st
 import torch
 from PIL import Image
@@ -96,9 +98,10 @@ def show_gradcam(image: Image.Image, model, device):
                 device=device,
             )
 
+        heatmap_rgb = (plt.colormaps["jet"](heatmap)[:, :, :3] * 255).astype(np.uint8)
         col1, col2 = st.columns(2)
         with col1:
-            st.image(heatmap, caption="Activation heatmap", clamp=True, use_container_width=True)
+            st.image(heatmap_rgb, caption="Activation heatmap", use_container_width=True)
         with col2:
             st.image(overlay, caption="Overlay", use_container_width=True)
 

@@ -12,10 +12,11 @@ Key optimisations vs the single-device version
    one forward pass (or a small number if VRAM is tight).  This cuts
    faithfulness computation from O(N_steps) forward passes to O(1).
 
-3. torch.compile — models are compiled with mode="reduce-overhead" after
-   loading.  First call pays a ~20 s compile cost; all subsequent calls are
-   significantly faster (especially beneficial for the large insertion/deletion
-   batch).
+3. torch.compile — models are compiled with mode="max-autotune-no-cudagraphs".
+   CUDA graphs are explicitly disabled because they use thread-local storage
+   initialised only on the main thread; running them from worker threads
+   raises an AssertionError in cudagraph_trees.py.  The no-cudagraphs mode
+   still gives full Triton kernel fusion and autotuning.
 
 4. AMP (Automatic Mixed Precision) — all forward passes run under
    torch.autocast("cuda", dtype=torch.float16), halving memory bandwidth and
@@ -513,12 +514,19 @@ def run_xai_for_model(
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    # torch.compile: the ~15s one-time cost pays back on large num_images
+    # torch.compile inside a thread requires CUDA graphs disabled.
+    # "reduce-overhead" enables CUDA graphs by default, which use thread-local
+    # storage (TLS) initialised only on the main thread → AssertionError in
+    # cudagraph_trees.py when called from worker threads.
+    # "max-autotune-no-cudagraphs" gives full Triton kernel fusion without graphs.
     if use_compile and device.type == "cuda":
-        print(f"  [{model_name}] Compiling model...")
+        print(f"  [{model_name}] Compiling model (no-cudagraphs, thread-safe)...")
         t0 = time.time()
-        model = torch.compile(model, mode="reduce-overhead")
-        # Warm-up forward pass so compile finishes before timing starts
+        model = torch.compile(
+            model,
+            mode="max-autotune-no-cudagraphs",
+        )
+        # Warm-up: triggers the actual Triton kernel compilation
         dummy = torch.zeros(1, 3, image_size, image_size, device=device)
         with torch.no_grad():
             model(dummy)

@@ -1,0 +1,13 @@
+{
+  "model": "resnet18",
+  "image": "person100_bacteria_475",
+  "true_class": "PNEUMONIA",
+  "predicted_class": "PNEUMONIA",
+  "probability": 0.3957,
+  "threshold": 0.3,
+  "methods_computed": {
+    "gradcam": true,
+    "lrp": false,
+    "occlusion": true
+  }
+}

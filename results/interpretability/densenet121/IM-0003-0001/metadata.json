@@ -1,0 +1,13 @@
+{
+  "model": "densenet121",
+  "image": "IM-0003-0001",
+  "true_class": "NORMAL",
+  "predicted_class": "NORMAL",
+  "probability": 0.0005,
+  "threshold": 0.3,
+  "methods_computed": {
+    "gradcam": true,
+    "lrp": true,
+    "occlusion": true
+  }
+}

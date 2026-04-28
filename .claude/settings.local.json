@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mv src/train.py src/train_old.py)",
+      "Bash(mv src/evaluate.py src/evaluate_old.py)",
+      "Bash(mv src/models.py src/models_old.py)",
+      "Bash(mv src/infer.py src/infer_old.py)",
+      "Bash(python -m py_compile src/models.py src/train.py src/evaluate.py src/run_interpretability.py src/analysis.py src/interpretability/gradcam.py src/interpretability/lrp.py src/interpretability/occlusion.py src/interpretability/__init__.py)"
+    ]
+  }
+}

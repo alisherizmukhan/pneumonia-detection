@@ -1,0 +1,13 @@
+{
+  "model": "efficientnet_b0",
+  "image": "IM-0006-0001",
+  "true_class": "NORMAL",
+  "predicted_class": "NORMAL",
+  "probability": 0.0332,
+  "threshold": 0.3,
+  "methods_computed": {
+    "gradcam": true,
+    "lrp": false,
+    "occlusion": true
+  }
+}

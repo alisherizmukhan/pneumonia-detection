@@ -1,0 +1,34 @@
+[
+  {
+    "model": "densenet121",
+    "gradcam_lung_focus": 0.4211749017238617,
+    "lrp_lung_focus": 0.560086707274119,
+    "occlusion_lung_focus": 0.5984878465533257,
+    "avg_lung_focus": 0.5265831518504355,
+    "verdict": "MIXED \u2014 partial lung focus"
+  },
+  {
+    "model": "resnet18",
+    "gradcam_lung_focus": 0.29951691031455996,
+    "lrp_lung_focus": null,
+    "occlusion_lung_focus": 0.6319410413503647,
+    "avg_lung_focus": 0.4657289758324623,
+    "verdict": "MIXED \u2014 partial lung focus"
+  },
+  {
+    "model": "efficientnet_b0",
+    "gradcam_lung_focus": 0.25598334409296514,
+    "lrp_lung_focus": null,
+    "occlusion_lung_focus": 0.6988630145788193,
+    "avg_lung_focus": 0.4774231793358922,
+    "verdict": "MIXED \u2014 partial lung focus"
+  },
+  {
+    "model": "mobilenet_v2",
+    "gradcam_lung_focus": 0.5286107897758484,
+    "lrp_lung_focus": null,
+    "occlusion_lung_focus": 0.4696707151830196,
+    "avg_lung_focus": 0.499140752479434,
+    "verdict": "MIXED \u2014 partial lung focus"
+  }
+]

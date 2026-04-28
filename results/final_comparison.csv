@@ -1,0 +1,5 @@
+Model,ROC-AUC,PR-AUC,Recall,F1,Accuracy,Threshold,GradCAM,LRP,Occlusion,Verdict
+densenet121,0.9763,0.9815,0.9615,0.9506,0.9375,0.3,0.421,0.560,0.598,MIXED — partial lung focus
+resnet18,0.9743,0.9840,0.8974,0.9272,0.9119,0.3,0.300,,0.632,MIXED — partial lung focus
+efficientnet_b0,0.9816,0.9889,0.9872,0.9471,0.9311,0.3,0.256,,0.699,MIXED — partial lung focus
+mobilenet_v2,0.9878,0.9923,0.9949,0.9395,0.9199,0.3,0.529,,0.470,MIXED — partial lung focus

@@ -1,35 +1,30 @@
 import os
+import sys
+import csv
 import argparse
-import json
-import shutil
 
-import torch
 import numpy as np
-import matplotlib.pyplot as plt
+import torch
 from sklearn.metrics import (
     accuracy_score,
-    precision_score,
     recall_score,
     f1_score,
     roc_auc_score,
-    confusion_matrix,
-    ConfusionMatrixDisplay,
-    roc_curve,
+    average_precision_score,
 )
 from tqdm import tqdm
-from torchvision import datasets
 
+sys.path.insert(0, os.path.dirname(__file__))
 from data import get_dataloaders
 from models import get_model
 from utils import set_seed, load_model, get_device, get_logger, load_config, save_metrics
 
 
 def predict(model, loader, device):
-    """Run inference and return true labels, predicted labels, and probabilities."""
+    """Run inference and return (y_true, y_prob) as numpy arrays."""
     model.eval()
     all_labels = []
     all_probs = []
-
     with torch.no_grad():
         for images, labels in tqdm(loader, desc="Evaluating", leave=False):
             images = images.to(device)
@@ -37,191 +32,35 @@ def predict(model, loader, device):
             probs = torch.sigmoid(outputs).cpu().numpy()
             all_probs.extend(probs)
             all_labels.extend(labels.numpy())
-
-    all_labels = np.array(all_labels)
-    all_probs = np.array(all_probs)
-    all_preds = (all_probs >= 0.5).astype(int)
-
-    return all_labels, all_preds, all_probs
+    return np.array(all_labels), np.array(all_probs)
 
 
-def compute_metrics(y_true, y_pred, y_prob):
-    """Compute classification metrics."""
+def compute_metrics(y_true, y_prob, threshold: float = 0.3) -> dict:
+    y_pred = (y_prob >= threshold).astype(int)
     return {
         "accuracy": float(accuracy_score(y_true, y_pred)),
-        "precision": float(precision_score(y_true, y_pred, zero_division=0)),
         "recall": float(recall_score(y_true, y_pred, zero_division=0)),
         "f1_score": float(f1_score(y_true, y_pred, zero_division=0)),
         "roc_auc": float(roc_auc_score(y_true, y_prob)),
+        "pr_auc": float(average_precision_score(y_true, y_prob)),
+        "threshold": float(threshold),
     }
 
 
-def plot_confusion_matrix(y_true, y_pred, save_path):
-    """Plot and save confusion matrix."""
-    cm = confusion_matrix(y_true, y_pred)
-    disp = ConfusionMatrixDisplay(
-        confusion_matrix=cm, display_labels=["Normal", "Pneumonia"]
-    )
-    fig, ax = plt.subplots(figsize=(7, 6))
-    disp.plot(ax=ax, cmap="Blues", values_format="d")
-    ax.set_title("Confusion Matrix")
-    plt.tight_layout()
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    plt.savefig(save_path, dpi=150)
-    plt.close()
-
-
-def plot_roc_curve(y_true, y_prob, save_path):
-    """Plot and save ROC curve."""
-    fpr, tpr, _ = roc_curve(y_true, y_prob)
-    auc = roc_auc_score(y_true, y_prob)
-
-    fig, ax = plt.subplots(figsize=(7, 6))
-    ax.plot(fpr, tpr, label=f"AUC = {auc:.4f}")
-    ax.plot([0, 1], [0, 1], "k--", alpha=0.5)
-    ax.set_xlabel("False Positive Rate")
-    ax.set_ylabel("True Positive Rate")
-    ax.set_title("ROC Curve")
-    ax.legend()
-    ax.grid(True)
-    plt.tight_layout()
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    plt.savefig(save_path, dpi=150)
-    plt.close()
-
-
-def extract_error_images(data_dir, y_true, y_pred, y_prob, results_dir, logger):
-    """Copy misclassified images to results/errors/."""
-    test_dir = os.path.join(data_dir, "test")
-    test_dataset = datasets.ImageFolder(root=test_dir)
-    samples = test_dataset.samples  # list of (path, class_idx)
-
-    fp_dir = os.path.join(results_dir, "errors", "false_positive")
-    fn_dir = os.path.join(results_dir, "errors", "false_negative")
-    os.makedirs(fp_dir, exist_ok=True)
-    os.makedirs(fn_dir, exist_ok=True)
-
-    fp_count = 0
-    fn_count = 0
-    for i, (img_path, true_label) in enumerate(samples):
-        pred_label = y_pred[i]
-        if true_label == 0 and pred_label == 1:
-            # False positive: predicted pneumonia but actually normal
-            dst = os.path.join(fp_dir, f"fp_{fp_count:04d}_{os.path.basename(img_path)}")
-            shutil.copy2(img_path, dst)
-            fp_count += 1
-        elif true_label == 1 and pred_label == 0:
-            # False negative: predicted normal but actually pneumonia
-            dst = os.path.join(fn_dir, f"fn_{fn_count:04d}_{os.path.basename(img_path)}")
-            shutil.copy2(img_path, dst)
-            fn_count += 1
-
-    logger.info(f"Error analysis: {fp_count} false positives, {fn_count} false negatives")
-    logger.info(f"Error images saved to {os.path.join(results_dir, 'errors')}")
-
-
-def threshold_tuning(y_true, y_prob, results_dir, logger):
-    """Test multiple thresholds and save the best one."""
-    thresholds = [0.3, 0.4, 0.5, 0.6, 0.7]
-    results = []
-
-    for t in thresholds:
-        preds = (y_prob >= t).astype(int)
-        metrics = compute_metrics(y_true, preds, y_prob)
-        metrics["threshold"] = t
-        results.append(metrics)
-        logger.info(
-            f"  Threshold {t:.1f} | Acc: {metrics['accuracy']:.4f} | "
-            f"Prec: {metrics['precision']:.4f} | Rec: {metrics['recall']:.4f} | "
-            f"F1: {metrics['f1_score']:.4f}"
-        )
-
-    # Select best threshold by F1 score
-    best = max(results, key=lambda x: x["f1_score"])
-    best_threshold_data = {
-        "best_threshold": best["threshold"],
-        "metrics_at_best": best,
-        "all_thresholds": results,
-    }
-
-    save_path = os.path.join(results_dir, "best_threshold.json")
-    save_metrics(best_threshold_data, save_path)
-    logger.info(f"Best threshold: {best['threshold']} (F1={best['f1_score']:.4f})")
-    logger.info(f"Threshold results saved to {save_path}")
-
-    return best["threshold"]
-
-
-def model_comparison(config, results_dir, logger):
-    """Evaluate all three models and produce comparison.json."""
-    device = get_device()
-    checkpoint_dir = config.get("checkpoint_dir", "checkpoints")
-
-    model_configs = {
-        "baseline": os.path.join(checkpoint_dir, "best_model_baseline.pt"),
-        "resnet18": os.path.join(checkpoint_dir, "best_model_resnet18.pt"),
-        "densenet121": os.path.join(checkpoint_dir, "best_model_densenet121.pt"),
-    }
-    comparison = {}
-
-    for model_name, checkpoint_path in model_configs.items():
-        if not os.path.exists(checkpoint_path):
-            logger.warning(
-                f"No checkpoint found for {model_name} at {checkpoint_path}. Skipping."
-            )
-            continue
-
-        logger.info(f"Evaluating model: {model_name}")
-        model = get_model(model_name=model_name, freeze_backbone=False, pretrained=False)
-        model = load_model(model, checkpoint_path, device)
-        model = model.to(device)
-
-        _, _, test_loader = get_dataloaders(
-            data_dir=config["data_dir"],
-            batch_size=config["batch_size"],
-            image_size=config["image_size"],
-            num_workers=config.get("num_workers", 4),
-        )
-
-        y_true, y_pred, y_prob = predict(model, test_loader, device)
-        metrics = compute_metrics(y_true, y_pred, y_prob)
-        metrics["model"] = model_name
-
-        # Also compute F1 at tuned threshold 0.3
-        tuned_preds = (y_prob >= 0.3).astype(int)
-        metrics["f1_at_0.3"] = float(f1_score(y_true, tuned_preds, zero_division=0))
-
-        comparison[model_name] = metrics
-        logger.info(f"  {model_name}: Acc={metrics['accuracy']:.4f} F1={metrics['f1_score']:.4f} AUC={metrics['roc_auc']:.4f}")
-
-    if comparison:
-        save_path = os.path.join(results_dir, "comparison.json")
-        save_metrics(comparison, save_path)
-        logger.info(f"Comparison saved to {save_path}")
-
-        # Print comparison table
-        logger.info("\n" + "=" * 80)
-        logger.info(f"{'Model':<14} {'Accuracy':>10} {'Precision':>10} {'Recall':>10} {'F1':>10} {'F1@0.3':>10} {'ROC-AUC':>10}")
-        logger.info("-" * 80)
-        for name, m in comparison.items():
-            logger.info(
-                f"{name:<14} {m['accuracy']:>10.4f} {m['precision']:>10.4f} "
-                f"{m['recall']:>10.4f} {m['f1_score']:>10.4f} {m.get('f1_at_0.3', 0):>10.4f} {m['roc_auc']:>10.4f}"
-            )
-        logger.info("=" * 80)
-
-    return comparison
-
-
-def evaluate(config, model_path: str):
-    """Full evaluation pipeline."""
+def evaluate_all(config: dict) -> dict:
     logger = get_logger("evaluate")
-
     set_seed(config.get("seed", 42))
     device = get_device()
-    logger.info(f"Using device: {device}")
+    logger.info(f"Device: {device}")
 
-    # Data
+    models_list = config.get(
+        "models", ["densenet121", "resnet18", "efficientnet_b0", "mobilenet_v2"]
+    )
+    threshold = config.get("threshold", 0.3)
+    checkpoint_dir = config.get("checkpoint_dir", "checkpoints")
+    results_dir = config.get("results_dir", "results")
+    os.makedirs(results_dir, exist_ok=True)
+
     _, _, test_loader = get_dataloaders(
         data_dir=config["data_dir"],
         batch_size=config["batch_size"],
@@ -229,85 +68,63 @@ def evaluate(config, model_path: str):
         num_workers=config.get("num_workers", 4),
     )
 
-    # Model
-    model_name = config.get("model", "densenet121")
-    logger.info(f"Loading model: {model_name}")
-    logger.info(f"Checkpoint: {model_path}")
+    all_metrics = {}
 
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(f"Checkpoint not found: {model_path}")
+    for model_name in models_list:
+        ckpt_path = os.path.join(checkpoint_dir, f"{model_name}.pt")
+        if not os.path.exists(ckpt_path):
+            logger.warning(f"Checkpoint not found: {ckpt_path} — skipping {model_name}")
+            continue
 
-    model = get_model(
-        model_name=model_name,
-        freeze_backbone=config.get("freeze_backbone", False),
-        pretrained=False,
-    )
-    model = load_model(model, model_path, device)
-    model = model.to(device)
-    logger.info(f"Loaded model from {model_path}")
+        logger.info(f"Evaluating {model_name}...")
+        model = get_model(model_name)
+        model = load_model(model, ckpt_path, device)
+        model = model.to(device)
 
-    # Predict
-    y_true, y_pred, y_prob = predict(model, test_loader, device)
+        y_true, y_prob = predict(model, test_loader, device)
+        metrics = compute_metrics(y_true, y_prob, threshold)
+        metrics["model"] = model_name
 
-    # Metrics
-    metrics = compute_metrics(y_true, y_pred, y_prob)
-    results_dir = config.get("results_dir", "results")
-    os.makedirs(results_dir, exist_ok=True)
+        save_metrics(metrics, os.path.join(results_dir, f"{model_name}_metrics.json"))
+        logger.info(
+            f"  {model_name}: ROC-AUC={metrics['roc_auc']:.4f}  "
+            f"PR-AUC={metrics['pr_auc']:.4f}  F1={metrics['f1_score']:.4f}  "
+            f"Recall={metrics['recall']:.4f}  Acc={metrics['accuracy']:.4f}"
+        )
+        all_metrics[model_name] = metrics
 
-    metrics_path = os.path.join(results_dir, "metrics.json")
-    save_metrics(metrics, metrics_path)
-    logger.info(f"Metrics saved to {metrics_path}")
-
-    for k, v in metrics.items():
-        logger.info(f"  {k}: {v:.4f}")
-
-    # Plots
-    cm_path = os.path.join(results_dir, "confusion_matrix.png")
-    plot_confusion_matrix(y_true, y_pred, cm_path)
-    logger.info(f"Confusion matrix saved to {cm_path}")
-
-    roc_path = os.path.join(results_dir, "roc_curve.png")
-    plot_roc_curve(y_true, y_prob, roc_path)
-    logger.info(f"ROC curve saved to {roc_path}")
-
-    # Error analysis
-    logger.info("Running error analysis...")
-    extract_error_images(
-        config["data_dir"], y_true, y_pred, y_prob, results_dir, logger
-    )
-
-    # Threshold tuning
-    logger.info("Running threshold tuning...")
-    threshold_tuning(y_true, y_prob, results_dir, logger)
-
-    # Model comparison (if multiple checkpoints exist)
-    logger.info("Running model comparison...")
-    model_comparison(config, results_dir, logger)
+    if all_metrics:
+        _write_comparison_csv(all_metrics, results_dir, logger)
 
     logger.info("Evaluation complete.")
-    return metrics
+    return all_metrics
+
+
+def _write_comparison_csv(all_metrics: dict, results_dir: str, logger) -> None:
+    path = os.path.join(results_dir, "final_comparison.csv")
+    fieldnames = ["Model", "ROC-AUC", "PR-AUC", "Recall", "F1", "Accuracy", "Threshold"]
+    with open(path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for model_name, m in all_metrics.items():
+            writer.writerow({
+                "Model": model_name,
+                "ROC-AUC": f"{m['roc_auc']:.4f}",
+                "PR-AUC": f"{m['pr_auc']:.4f}",
+                "Recall": f"{m['recall']:.4f}",
+                "F1": f"{m['f1_score']:.4f}",
+                "Accuracy": f"{m['accuracy']:.4f}",
+                "Threshold": m["threshold"],
+            })
+    logger.info(f"Comparison CSV saved: {path}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate pneumonia detection model")
-    parser.add_argument(
-        "--config", type=str, default="configs/config.yaml",
-        help="Path to config YAML file",
-    )
-    parser.add_argument(
-        "--model", type=str, default=None,
-        help="Path to saved model checkpoint (default: checkpoints/best_model_{config.model}.pt)",
-    )
+    parser = argparse.ArgumentParser(description="Evaluate all pneumonia detection models")
+    parser.add_argument("--config", type=str, default="configs/config.yaml")
     args = parser.parse_args()
-
     config = load_config(args.config)
-    model_path = args.model
-    if model_path is None:
-        model_name = config.get("model", "densenet121")
-        model_path = os.path.join(
-            config.get("checkpoint_dir", "checkpoints"), f"best_model_{model_name}.pt"
-        )
-    evaluate(config, model_path)
+    evaluate_all(config)
 
 
 if __name__ == "__main__":
